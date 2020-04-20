@@ -252,3 +252,97 @@ The counter has restarted from 1, which isn’t ideal. In practice, you’d want
 have separate processes for storing the value (simple and should never crash)
 and performing calculations (might crash, but doesn’t need to maintain its own
 state).
+
+## Tasks
+
+The `SlowOperation` module (`lib/slow_operation.ex`) contains a `run/0`
+function, which simulates a slow operation (eg interacting with an external
+service). It calculates a random number between 1 and 10, sleeps for that
+number of seconds, then prints out and returns the number. If we need to call
+it multiple times sequentially, it’ll take a long time.
+
+We can use Erlang’s `timer.tc/1` to measure how long the operation takes (in
+microseconds):
+
+```
+$ iex -S mix
+iex(1)> :timer.tc(fn -> (1..5) |> Enum.map(fn _ -> SlowOperation.run end) end)
+3
+3
+10
+2
+4
+{22005144, [3, 3, 10, 2, 4]}
+```
+
+Now we’ll use `Task.async/2` to spawn each operation in a separate process, and
+`Task.await/1` to gather the results:
+
+```
+$ iex -S mix
+iex(1)> tasks = Enum.map(1..5, fn _ -> Task.async(SlowOperation, :run, []) end)
+[
+  %Task{
+    owner: #PID<0.146.0>,
+    pid: #PID<0.162.0>,
+    ref: #Reference<0.1449039036.2818310148.107275>
+  },
+  %Task{
+    owner: #PID<0.146.0>,
+    pid: #PID<0.163.0>,
+    ref: #Reference<0.1449039036.2818310148.107276>
+  },
+  %Task{
+    owner: #PID<0.146.0>,
+    pid: #PID<0.164.0>,
+    ref: #Reference<0.1449039036.2818310148.107277>
+  },
+  %Task{
+    owner: #PID<0.146.0>,
+    pid: #PID<0.165.0>,
+    ref: #Reference<0.1449039036.2818310148.107278>
+  },
+  %Task{
+    owner: #PID<0.146.0>,
+    pid: #PID<0.166.0>,
+    ref: #Reference<0.1449039036.2818310148.107279>
+  }
+]
+1
+2
+4
+5
+6
+iex(2)> Enum.map(tasks, &Task.await/1)
+[1, 2, 6, 5, 4]
+```
+
+We can bundle that all together into a pipeline (supplying a timeout to `Task.await/2` – the default is 5 seconds):
+
+```
+$ iex -S mix
+iex(1)> 1..5 |> Enum.map(fn _ -> Task.async(SlowOperation, :run, []) end) |> Enum.map(&Task.await(&1, 10_000))
+2
+2
+3
+4
+6
+[2, 3, 6, 2, 4]
+```
+
+Let’s see how long it takes to run it in parallel 10,000 times:
+
+```
+$ iex -S mix
+iex(1)> :timer.tc(fn -> 1..10_000 |> Enum.map(fn _ -> Task.async(SlowOperation, :run, []) end) |> Enum.map(&Task.await(&1, 10_000)) end)
+1
+1
+1
+[... etc ...]
+10
+10
+10
+{12094767,
+ [10, 1, 6, 10, 3, 4, 3, 7, 5, 4, 9, 5, 5, 1, 6, 2, 3, 2, 8, 5, 2, 5, 6, 8, 4,
+  7, 2, 8, 4, 9, 8, 3, 8, 3, 10, 2, 6, 7, 9, 1, 10, 5, 4, 9, 3, 2, 7, 2, ...]}
+```
