@@ -177,7 +177,7 @@ iex(3)> CounterAgent.inc(pid)
 
 If we know we’re only going to have one counter, we can name the server and
 avoid having to provide its pid. Convention is to use the module name, to
-ensure uniqueness (see `lib/counter_agent2.ex`.
+ensure uniqueness (see `lib/counter_agent2.ex`).
 
 ```
 $ iex -S mix
