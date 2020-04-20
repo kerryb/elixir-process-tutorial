@@ -188,3 +188,67 @@ iex(1)> CounterAgent2.inc()
 iex(2)> CounterAgent2.inc()
 2
 ```
+
+## Supervision trees
+
+If we want our counter to start automatically as part of the application, we
+can add it to the supervision tree. We didn’t create the app with supervision
+enabled, but we can re-run `mix new` with the `--sup` flag to add the required
+files and configuration:
+
+```
+$ cd ..
+$ mix new --sup processes
+The directory "processes" already exists. Are you sure you want to continue? [Yn] y
+* creating README.md
+README.md already exists, overwrite? [Yn] n
+* creating .formatter.exs
+* creating .gitignore
+* creating mix.exs
+mix.exs already exists, overwrite? [Yn] y
+* creating lib
+* creating lib/processes.ex
+* creating lib/processes/application.ex
+* creating test
+* creating test/test_helper.exs
+* creating test/processes_test.exs
+
+Your Mix project was created successfully.
+You can use "mix" to compile it, test it, and more:
+
+    cd processes
+    mix test
+
+Run "mix help" for more commands.
+$ cd -
+```
+
+Now we can add `CounterAgent2` to the supervision tree in
+`lib/processes/application.ex`, and it’ll be started for us:
+
+```
+$ iex -S mix
+iex(1)> CounterAgent2.inc()
+1
+iex(2)> CounterAgent2.inc()
+2
+```
+
+If we kill the counter, it’s automatically restarted for us (note the new pid):
+
+```
+$ iex -S mix
+iex(1)> pid = Process.whereis(CounterAgent2)
+#PID<0.161.0>
+iex(2)> Process.exit(pid, :kill)
+true
+iex(3)> pid = Process.whereis(CounterAgent2)
+#PID<0.173.0>
+iex(4)> CounterAgent2.inc()
+1
+```
+
+The counter has restarted from 1, which isn’t ideal. In practice, you’d want to
+have separate processes for storing the value (simple and should never crash)
+and performing calculations (might crash, but doesn’t need to maintain its own
+state).

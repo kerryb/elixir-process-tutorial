@@ -1,7 +1,7 @@
 defmodule CounterAgent do
   use Agent
 
-  def start_link do
+  def start_link(_) do
     Agent.start_link(fn -> 0 end)
   end
 
